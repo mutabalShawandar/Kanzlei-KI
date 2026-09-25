@@ -32,7 +32,11 @@ class Citation(BaseModel):
 class RAGAnswer(BaseModel):
     answer: str
     citations: list[Citation]
-    confidence: Literal["verified", "unverified"]
+    # "cited" means every [n] marker in the answer is well-formed and maps to an actually
+    # retrieved chunk — it is NOT a claim that the answer is factually correct. Per this
+    # project's accuracy gate (PLAN.md), only a human review against the golden eval set
+    # earns the word "verified"; reusing it here for a structural check would be misleading.
+    confidence: Literal["cited", "unverified"]
 
 
 def format_context(chunks: list[RetrievedChunk]) -> str:
@@ -58,9 +62,7 @@ def _build_validated_answer(raw_answer: str, chunks: list[RetrievedChunk]) -> RA
     valid_numbers = {n for n in cited_numbers if 1 <= n <= len(chunks)}
 
     is_fully_valid = bool(cited_numbers) and cited_numbers == valid_numbers
-    confidence: Literal["verified", "unverified"] = (
-        "verified" if is_fully_valid else "unverified"
-    )
+    confidence: Literal["cited", "unverified"] = "cited" if is_fully_valid else "unverified"
 
     citations = [
         Citation(
@@ -94,8 +96,9 @@ async def answer_with_citations(
     """Query the LLM with a citation-required prompt and return a validated RAGAnswer.
 
     `confidence` is derived programmatically from the returned text, never trusted from the
-    model's own claim: an answer is only "verified" when every [n] marker it contains maps to
-    an actually retrieved chunk, and it contains at least one marker.
+    model's own claim: an answer is only "cited" when every [n] marker it contains maps to
+    an actually retrieved chunk, and it contains at least one marker. This checks citation
+    structure only, not factual correctness — see the RAGAnswer.confidence docstring.
     """
     messages = build_messages(query, chunks)
     response = await llm.chat(messages)

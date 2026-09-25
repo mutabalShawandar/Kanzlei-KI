@@ -30,14 +30,14 @@ def make_chunk(n: int) -> RetrievedChunk:
 
 
 @pytest.mark.asyncio
-async def test_well_formed_answer_with_valid_citations_is_verified() -> None:
+async def test_well_formed_answer_with_valid_citations_is_cited() -> None:
     chunks = [make_chunk(1), make_chunk(2)]
     llm = StubLLMProvider("Freiberufler must register with the Finanzamt [1]. No trade license is needed [2].")
 
     result = await answer_with_citations("Do I need to register?", chunks, llm)
 
     assert isinstance(result, RAGAnswer)
-    assert result.confidence == "verified"
+    assert result.confidence == "cited"
     assert len(result.citations) == 2
     assert result.citations[0].source_id == "source-1"
     assert result.citations[1].source_id == "source-2"

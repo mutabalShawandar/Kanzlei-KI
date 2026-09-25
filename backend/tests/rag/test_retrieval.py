@@ -23,7 +23,7 @@ class FakeQdrantClient:
         self._points = points
         self.last_call: dict[str, Any] = {}
 
-    def query_points(self, collection_name: str, query: list[float], limit: int) -> FakeQueryResult:
+    async def query_points(self, collection_name: str, query: list[float], limit: int) -> FakeQueryResult:
         self.last_call = {
             "collection_name": collection_name,
             "query": query,
@@ -101,3 +101,18 @@ async def test_retrieve_rejects_non_positive_top_k() -> None:
 
     with pytest.raises(ValueError):
         await retriever.retrieve("query", top_k=0)
+
+
+@pytest.mark.asyncio
+async def test_retrieve_skips_points_with_incomplete_payload() -> None:
+    points = [
+        FakePoint(payload={"text": "incomplete, missing keys"}),
+        FakePoint(payload=make_payload(2)),
+    ]
+    client = FakeQdrantClient(points)
+    retriever = QdrantRetriever(client, "kb", stub_embed_fn)  # type: ignore[arg-type]
+
+    result = await retriever.retrieve("query", top_k=2)
+
+    assert len(result) == 1
+    assert result[0].source_id == "source-2"

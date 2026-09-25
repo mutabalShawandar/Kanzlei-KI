@@ -1,7 +1,9 @@
 from typing import Any, Awaitable, Callable, Protocol
 
 from pydantic import BaseModel
-from qdrant_client import QdrantClient
+from qdrant_client import AsyncQdrantClient
+
+_REQUIRED_PAYLOAD_KEYS = {"text", "source_id", "title", "url"}
 
 
 class RetrievedChunk(BaseModel):
@@ -28,7 +30,7 @@ class QdrantRetriever:
 
     def __init__(
         self,
-        client: QdrantClient,
+        client: AsyncQdrantClient,
         collection_name: str,
         embed_fn: Callable[[str], Awaitable[list[float]]],
     ) -> None:
@@ -42,16 +44,23 @@ class QdrantRetriever:
 
         query_vector = await self._embed_fn(query)
 
-        results = self._client.query_points(
+        response = await self._client.query_points(
             collection_name=self._collection_name,
             query=query_vector,
             limit=top_k,
-        ).points
+        )
 
-        return [self._to_chunk(point.payload or {}) for point in results]
+        chunks = []
+        for point in response.points:
+            chunk = self._to_chunk(point.payload or {})
+            if chunk is not None:
+                chunks.append(chunk)
+        return chunks
 
     @staticmethod
-    def _to_chunk(payload: dict[str, Any]) -> RetrievedChunk:
+    def _to_chunk(payload: dict[str, Any]) -> RetrievedChunk | None:
+        if not _REQUIRED_PAYLOAD_KEYS.issubset(payload):
+            return None
         return RetrievedChunk(
             text=payload["text"],
             source_id=payload["source_id"],
