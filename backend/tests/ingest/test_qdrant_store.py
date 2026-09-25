@@ -67,6 +67,29 @@ def test_upsert_chunks_is_idempotent_on_re_ingestion(client: QdrantClient) -> No
     assert point.vector[0] == point.vector[1] == point.vector[2] > 0
 
 
+def test_upsert_chunks_removes_stale_points_when_source_shrinks(client: QdrantClient) -> None:
+    ensure_collection(client, "kb", vector_size=3)
+    upsert_chunks(client, "kb", [_chunk(0), _chunk(1), _chunk(2)], [[0.1, 0.2, 0.3]] * 3)
+
+    upsert_chunks(client, "kb", [_chunk(0)], [[0.1, 0.2, 0.3]])
+
+    assert client.count("kb").count == 1
+    assert client.retrieve("kb", ids=[point_id_for("estg-1", 0)])
+    assert not client.retrieve("kb", ids=[point_id_for("estg-1", 1)])
+    assert not client.retrieve("kb", ids=[point_id_for("estg-1", 2)])
+
+
+def test_upsert_chunks_does_not_touch_points_from_other_sources(client: QdrantClient) -> None:
+    ensure_collection(client, "kb", vector_size=3)
+    upsert_chunks(client, "kb", [_chunk(0, source_id="estg-1")], [[0.1, 0.2, 0.3]])
+    upsert_chunks(client, "kb", [_chunk(0, source_id="estg-2")], [[0.4, 0.5, 0.6]])
+
+    upsert_chunks(client, "kb", [_chunk(0, source_id="estg-1")], [[0.1, 0.2, 0.3]])
+
+    assert client.count("kb").count == 2
+    assert client.retrieve("kb", ids=[point_id_for("estg-2", 0)])
+
+
 def test_point_id_is_stable_for_same_source_and_index() -> None:
     assert point_id_for("estg-1", 0) == point_id_for("estg-1", 0)
     assert point_id_for("estg-1", 0) != point_id_for("estg-1", 1)
