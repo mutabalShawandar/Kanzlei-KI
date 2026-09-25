@@ -5,9 +5,11 @@ description = "Kanzlei-KI backend: ingestion, RAG chat API, review queue, eval h
 requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.15.0",
+    "fastembed>=0.8.1",
     "httpx>=0.28.1",
     "pydantic>=2.13.5",
     "qdrant-client>=1.19.1",
+    "sentence-transformers>=6.1.0",
 ]
 
 [dependency-groups]

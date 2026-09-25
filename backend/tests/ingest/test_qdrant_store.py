@@ -2,10 +2,19 @@ from datetime import datetime, timezone
 
 import pytest
 from qdrant_client import QdrantClient
+from qdrant_client.models import SparseVector
 
 from ingest import qdrant_store
 from ingest.chunking import Chunk
-from ingest.qdrant_store import ChunkVectorCountMismatchError, ensure_collection, point_id_for, upsert_chunks
+from ingest.qdrant_store import (
+    DENSE_VECTOR_NAME,
+    SPARSE_VECTOR_NAME,
+    ChunkVectorCountMismatchError,
+    CollectionSchemaMismatchError,
+    ensure_collection,
+    point_id_for,
+    upsert_chunks,
+)
 
 RETRIEVED_AT = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
@@ -41,6 +50,15 @@ def test_ensure_collection_is_idempotent(client: QdrantClient) -> None:
     assert client.collection_exists("kb")
 
 
+def test_ensure_collection_rejects_pre_hybrid_schema(client: QdrantClient) -> None:
+    from qdrant_client.models import Distance, VectorParams
+
+    client.create_collection(collection_name="kb", vectors_config=VectorParams(size=4, distance=Distance.COSINE))
+
+    with pytest.raises(CollectionSchemaMismatchError):
+        ensure_collection(client, "kb", vector_size=4)
+
+
 def test_upsert_chunks_stores_payload(client: QdrantClient) -> None:
     ensure_collection(client, "kb", vector_size=3)
     chunks = [_chunk(0), _chunk(1)]
@@ -54,6 +72,41 @@ def test_upsert_chunks_stores_payload(client: QdrantClient) -> None:
     assert point.payload["source_id"] == "estg-1"
 
 
+def test_upsert_chunks_stores_both_dense_and_sparse_vectors(client: QdrantClient) -> None:
+    ensure_collection(client, "kb", vector_size=3)
+    chunks = [_chunk(0)]
+    sparse_vectors = [SparseVector(indices=[1, 5], values=[0.7, 0.3])]
+
+    upsert_chunks(client, "kb", chunks, [[0.1, 0.2, 0.3]], sparse_vectors)
+
+    point = client.retrieve("kb", ids=[point_id_for("estg-1", 0)], with_vectors=True)[0]
+    assert DENSE_VECTOR_NAME in point.vector
+    assert SPARSE_VECTOR_NAME in point.vector
+    assert list(point.vector[SPARSE_VECTOR_NAME].indices) == [1, 5]
+
+
+def test_upsert_chunks_defaults_to_empty_sparse_vector_when_omitted(client: QdrantClient) -> None:
+    ensure_collection(client, "kb", vector_size=3)
+
+    upsert_chunks(client, "kb", [_chunk(0)], [[0.1, 0.2, 0.3]])
+
+    point = client.retrieve("kb", ids=[point_id_for("estg-1", 0)], with_vectors=True)[0]
+    assert list(point.vector[SPARSE_VECTOR_NAME].indices) == []
+
+
+def test_upsert_chunks_raises_on_sparse_vector_count_mismatch(client: QdrantClient) -> None:
+    ensure_collection(client, "kb", vector_size=3)
+
+    with pytest.raises(ChunkVectorCountMismatchError):
+        upsert_chunks(
+            client,
+            "kb",
+            [_chunk(0), _chunk(1)],
+            [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]],
+            [SparseVector(indices=[], values=[])],
+        )
+
+
 def test_upsert_chunks_is_idempotent_on_re_ingestion(client: QdrantClient) -> None:
     ensure_collection(client, "kb", vector_size=3)
     chunks = [_chunk(0)]
@@ -64,7 +117,8 @@ def test_upsert_chunks_is_idempotent_on_re_ingestion(client: QdrantClient) -> No
     assert client.count("kb").count == 1
     point = client.retrieve("kb", ids=[point_id_for("estg-1", 0)], with_vectors=True)[0]
     # Cosine-distance collections store normalized vectors, so compare direction, not raw values.
-    assert point.vector[0] == point.vector[1] == point.vector[2] > 0
+    dense_vector = point.vector[DENSE_VECTOR_NAME]
+    assert dense_vector[0] == dense_vector[1] == dense_vector[2] > 0
 
 
 def test_upsert_chunks_removes_stale_points_when_source_shrinks(client: QdrantClient) -> None:
