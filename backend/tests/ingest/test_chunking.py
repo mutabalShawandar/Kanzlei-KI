@@ -32,7 +32,7 @@ def test_splits_on_paragraph_boundaries_when_within_limit() -> None:
 def test_packs_paragraphs_until_limit_then_starts_new_chunk() -> None:
     document = _document("Para one.\n\nPara two.\n\nPara three.")
 
-    chunks = chunk_document(document, max_chunk_chars=9)
+    chunks = chunk_document(document, max_chunk_chars=11)
 
     assert len(chunks) == 3
     assert [c.text for c in chunks] == ["Para one.", "Para two.", "Para three."]
@@ -70,6 +70,16 @@ def test_chunk_carries_forward_parent_metadata() -> None:
     assert chunk.url == document.url
     assert chunk.section == "§1 Abs. 1"
     assert chunk.retrieved_at == document.retrieved_at
+
+
+def test_enforces_max_chunk_chars_even_without_sentence_boundaries() -> None:
+    unsplittable = "a" * 100
+    document = _document(unsplittable)
+
+    chunks = chunk_document(document, max_chunk_chars=30)
+
+    assert all(len(chunk.text) <= 30 for chunk in chunks)
+    assert "".join(chunk.text for chunk in chunks) == unsplittable
 
 
 def test_empty_text_produces_no_chunks() -> None:

@@ -46,15 +46,22 @@ def _split_paragraphs(text: str) -> list[str]:
     return [paragraph.strip() for paragraph in re.split(r"\n\s*\n", text) if paragraph.strip()]
 
 
-def _split_sentences(paragraph: str) -> list[str]:
-    return [sentence.strip() for sentence in _SENTENCE_BOUNDARY.split(paragraph) if sentence.strip()]
+def _split_sentences(paragraph: str, max_chunk_chars: int) -> list[str]:
+    sentences = [sentence.strip() for sentence in _SENTENCE_BOUNDARY.split(paragraph) if sentence.strip()]
+    # A single sentence can still exceed max_chunk_chars (no ".", "!", "?" boundary at all);
+    # fall back to a hard character split so the configured limit is always enforced.
+    return [
+        sentence[offset : offset + max_chunk_chars]
+        for sentence in sentences
+        for offset in range(0, len(sentence), max_chunk_chars)
+    ]
 
 
 def _pack_paragraphs(paragraphs: list[str], max_chunk_chars: int) -> list[str]:
     chunks: list[str] = []
     current = ""
     for paragraph in paragraphs:
-        pieces = [paragraph] if len(paragraph) <= max_chunk_chars else _split_sentences(paragraph)
+        pieces = [paragraph] if len(paragraph) <= max_chunk_chars else _split_sentences(paragraph, max_chunk_chars)
         for piece in pieces:
             candidate = f"{current}\n\n{piece}" if current else piece
             if len(candidate) <= max_chunk_chars or not current:
