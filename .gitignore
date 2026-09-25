@@ -35,6 +35,9 @@ PLAN.md
 PHASES.md
 CLAUDE.md
 
-# Gemini CLI
-.gemini/
+# Gemini CLI local session state (oauth creds, chat history, telemetry) —
+# but .gemini/commands/ holds committed custom slash-command definitions
+# the GitHub Actions workflows depend on, so that subfolder stays tracked.
+.gemini/*
+!.gemini/commands/
 gha-creds-*.json
