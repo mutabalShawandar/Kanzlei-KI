@@ -10,6 +10,7 @@ from ingest.qdrant_store import (
     DENSE_VECTOR_NAME,
     SPARSE_VECTOR_NAME,
     ChunkVectorCountMismatchError,
+    CollectionSchemaMismatchError,
     ensure_collection,
     point_id_for,
     upsert_chunks,
@@ -47,6 +48,15 @@ def test_ensure_collection_is_idempotent(client: QdrantClient) -> None:
     ensure_collection(client, "kb", vector_size=4)
 
     assert client.collection_exists("kb")
+
+
+def test_ensure_collection_rejects_pre_hybrid_schema(client: QdrantClient) -> None:
+    from qdrant_client.models import Distance, VectorParams
+
+    client.create_collection(collection_name="kb", vectors_config=VectorParams(size=4, distance=Distance.COSINE))
+
+    with pytest.raises(CollectionSchemaMismatchError):
+        ensure_collection(client, "kb", vector_size=4)
 
 
 def test_upsert_chunks_stores_payload(client: QdrantClient) -> None:

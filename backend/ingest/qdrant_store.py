@@ -29,6 +29,10 @@ class ChunkVectorCountMismatchError(ValueError):
     pass
 
 
+class CollectionSchemaMismatchError(ValueError):
+    pass
+
+
 def get_client(url: str | None = None) -> QdrantClient:
     """Build a Qdrant client from an explicit URL or the QDRANT_URL environment variable."""
     return QdrantClient(url=url or os.environ["QDRANT_URL"])
@@ -46,12 +50,34 @@ def ensure_collection(client: QdrantClient, collection_name: str, vector_size: i
     keyword/§-reference precision that dense cosine similarity alone can blur for legal text.
     """
     if client.collection_exists(collection_name):
+        _check_hybrid_schema(client, collection_name)
         return
     client.create_collection(
         collection_name=collection_name,
         vectors_config={DENSE_VECTOR_NAME: VectorParams(size=vector_size, distance=Distance.COSINE)},
         sparse_vectors_config={SPARSE_VECTOR_NAME: SparseVectorParams()},
     )
+
+
+def _check_hybrid_schema(client: QdrantClient, collection_name: str) -> None:
+    """Fail loudly if an existing collection predates the hybrid dense+sparse schema.
+
+    `create_collection` is only called once per collection name, so a collection created
+    under the old unnamed-dense-vector schema is never migrated automatically; writing named
+    vectors into it or reading them back via QdrantRetriever would otherwise fail with an
+    unclear Qdrant-side error deep in a request instead of a clear message here.
+    """
+    info = client.get_collection(collection_name)
+    vectors_config = info.config.params.vectors
+    sparse_config = info.config.params.sparse_vectors
+    has_named_dense = isinstance(vectors_config, dict) and DENSE_VECTOR_NAME in vectors_config
+    has_named_sparse = isinstance(sparse_config, dict) and SPARSE_VECTOR_NAME in sparse_config
+    if not (has_named_dense and has_named_sparse):
+        raise CollectionSchemaMismatchError(
+            f"Collection '{collection_name}' predates the hybrid dense+sparse vector schema "
+            f"(expected named vectors '{DENSE_VECTOR_NAME}' and '{SPARSE_VECTOR_NAME}'). "
+            "Recreate the collection before ingesting or querying it."
+        )
 
 
 def upsert_chunks(

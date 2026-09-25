@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Protocol
 
 from pydantic import BaseModel
@@ -68,7 +69,7 @@ class QdrantRetriever:
             raise ValueError(f"top_k must be >= 1, got {top_k}")
 
         dense_vector = await self._embed_fn(query)
-        sparse_vector = self._sparse_embed_fn(query)
+        sparse_vector = await asyncio.to_thread(self._sparse_embed_fn, query)
 
         dense_response = await self._client.query_points(
             collection_name=self._collection_name,
