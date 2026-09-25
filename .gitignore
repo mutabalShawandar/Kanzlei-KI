@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Data / caches (raw scraped sources, vector db data, model files)
+data/
+*.sqlite3
+qdrant_storage/
+ollama_data/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Internal planning docs (kept private, not pushed to the open-source repo)
+PLAN.md
+PHASES.md
+CLAUDE.md
