@@ -1,16 +1,15 @@
-import ipaddress
 import os
 from typing import Any
-from urllib.parse import urlsplit
 
 import httpx
 
 from llm.base import ChatMessage, LLMResponse
+from llm.network import BaseUrlConfigError, validate_base_url
 
 _REQUEST_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
 
 
-class OllamaConfigError(ValueError):
+class OllamaConfigError(BaseUrlConfigError):
     pass
 
 
@@ -18,36 +17,14 @@ class OllamaUnsupportedRequestError(ValueError):
     pass
 
 
-def _is_private_network_host(hostname: str) -> bool:
-    """Check whether a host may use plain HTTP for local Ollama access."""
-    if hostname == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(hostname).is_private
-    except ValueError:
-        pass
-    # Unqualified single-label hostnames (e.g. Docker Compose service names
-    # like "ollama") cannot resolve as public internet FQDNs.
-    return "." not in hostname
-
-
-def _validate_base_url(base_url: str) -> str:
-    """Require HTTPS unless the Ollama host is local or private."""
-    parsed = urlsplit(base_url)
-    if parsed.scheme == "https":
-        return base_url
-    if parsed.scheme == "http" and parsed.hostname is not None and _is_private_network_host(parsed.hostname):
-        return base_url
-    raise OllamaConfigError(
-        f"OLLAMA_BASE_URL must use HTTPS for remote/public hosts (got: {base_url!r}); "
-        "plain HTTP is only allowed for loopback, private-network, or unqualified internal hostnames."
-    )
-
-
 class OllamaProvider:
     def __init__(self, base_url: str | None = None, model: str | None = None) -> None:
         """Configure the Ollama endpoint and model from arguments or the environment."""
-        self.base_url = _validate_base_url((base_url or os.environ["OLLAMA_BASE_URL"]).rstrip("/"))
+        raw_base_url = (base_url or os.environ["OLLAMA_BASE_URL"]).rstrip("/")
+        try:
+            self.base_url = validate_base_url(raw_base_url, "OLLAMA_BASE_URL")
+        except BaseUrlConfigError as exc:
+            raise OllamaConfigError(str(exc)) from exc
         self.model = model or os.environ["OLLAMA_MODEL"]
 
     async def chat(self, messages: list[ChatMessage], **kwargs: Any) -> LLMResponse:
