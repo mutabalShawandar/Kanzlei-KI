@@ -15,4 +15,6 @@ class LLMResponse(BaseModel):
 
 
 class LLMProvider(Protocol):
-    async def chat(self, messages: list[ChatMessage], **kwargs: Any) -> LLMResponse: ...
+    async def chat(self, messages: list[ChatMessage], **kwargs: Any) -> LLMResponse:
+        """Return a provider response for the supplied chat messages."""
+        ...

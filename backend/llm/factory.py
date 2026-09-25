@@ -6,6 +6,7 @@ from llm.openrouter_provider import OpenRouterProvider
 
 
 def get_llm_provider() -> LLMProvider:
+    """Create the provider selected by the LLM_PROVIDER environment variable."""
     provider_name = os.environ.get("LLM_PROVIDER")
     if provider_name == "ollama":
         return OllamaProvider()

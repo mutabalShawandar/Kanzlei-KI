@@ -19,10 +19,12 @@ class OpenRouterResponseError(RuntimeError):
 
 class OpenRouterProvider:
     def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
+        """Configure the OpenRouter API key and model from arguments or the environment."""
         self.api_key = api_key or os.environ["OPENROUTER_API_KEY"]
         self.model = model or os.environ["OPENROUTER_MODEL"]
 
     async def chat(self, messages: list[ChatMessage], **kwargs: Any) -> LLMResponse:
+        """Send a chat completion request and return its non-tool response."""
         if kwargs.get("stream"):
             raise OpenRouterUnsupportedRequestError("Streaming responses are not supported by this provider.")
         if "tools" in kwargs:

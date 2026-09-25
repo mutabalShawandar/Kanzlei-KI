@@ -19,6 +19,7 @@ class OllamaUnsupportedRequestError(ValueError):
 
 
 def _is_private_network_host(hostname: str) -> bool:
+    """Check whether a host may use plain HTTP for local Ollama access."""
     if hostname == "localhost":
         return True
     try:
@@ -31,6 +32,7 @@ def _is_private_network_host(hostname: str) -> bool:
 
 
 def _validate_base_url(base_url: str) -> str:
+    """Require HTTPS unless the Ollama host is local or private."""
     parsed = urlsplit(base_url)
     if parsed.scheme == "https":
         return base_url
@@ -44,10 +46,12 @@ def _validate_base_url(base_url: str) -> str:
 
 class OllamaProvider:
     def __init__(self, base_url: str | None = None, model: str | None = None) -> None:
+        """Configure the Ollama endpoint and model from arguments or the environment."""
         self.base_url = _validate_base_url((base_url or os.environ["OLLAMA_BASE_URL"]).rstrip("/"))
         self.model = model or os.environ["OLLAMA_MODEL"]
 
     async def chat(self, messages: list[ChatMessage], **kwargs: Any) -> LLMResponse:
+        """Send a non-streaming chat request to Ollama and return its response."""
         if kwargs.pop("stream", False):
             raise OllamaUnsupportedRequestError("Streaming responses are not supported by this provider.")
         payload: dict[str, Any] = {

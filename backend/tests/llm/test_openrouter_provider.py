@@ -15,6 +15,7 @@ from llm.openrouter_provider import (
 @pytest.mark.asyncio
 @respx.mock
 async def test_chat_sends_expected_request_and_parses_response() -> None:
+    """Send OpenRouter's expected payload and parse its chat response."""
     route = respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
         return_value=httpx.Response(
             200,
@@ -43,6 +44,7 @@ async def test_chat_sends_expected_request_and_parses_response() -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_chat_raises_on_http_error() -> None:
+    """Propagate OpenRouter HTTP errors to the caller."""
     respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
         return_value=httpx.Response(401)
     )
@@ -53,6 +55,7 @@ async def test_chat_raises_on_http_error() -> None:
 
 
 def test_reads_config_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Read the OpenRouter API key and model from the environment."""
     monkeypatch.setenv("OPENROUTER_API_KEY", "env-key")
     monkeypatch.setenv("OPENROUTER_MODEL", "env-model")
 
@@ -64,6 +67,7 @@ def test_reads_config_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 async def test_rejects_streaming_request() -> None:
+    """Reject unsupported streaming requests before sending them."""
     provider = OpenRouterProvider(api_key="test-key", model="openai/gpt-4o-mini")
 
     with pytest.raises(OpenRouterUnsupportedRequestError):
@@ -72,6 +76,7 @@ async def test_rejects_streaming_request() -> None:
 
 @pytest.mark.asyncio
 async def test_rejects_tool_calling_request() -> None:
+    """Reject unsupported tool-calling requests before sending them."""
     provider = OpenRouterProvider(api_key="test-key", model="openai/gpt-4o-mini")
 
     with pytest.raises(OpenRouterUnsupportedRequestError):
@@ -81,6 +86,7 @@ async def test_rejects_tool_calling_request() -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_raises_on_null_content_response() -> None:
+    """Reject responses whose message has no text content."""
     respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
         return_value=httpx.Response(
             200,
