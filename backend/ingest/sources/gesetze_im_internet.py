@@ -26,10 +26,26 @@ def _extract_xml_bytes(archive_bytes: bytes, slug: str) -> bytes:
         return archive.read(xml_names[0])
 
 
+_BLOCK_TAGS = {"P", "Absatz", "Rahmen"}
+
+
+def _iter_text_with_block_separators(element: ET.Element) -> list[str]:
+    parts: list[str] = []
+    if element.text:
+        parts.append(element.text)
+    for child in element:
+        parts.extend(_iter_text_with_block_separators(child))
+        if child.tag in _BLOCK_TAGS:
+            parts.append("\n")
+        if child.tail:
+            parts.append(child.tail)
+    return parts
+
+
 def _element_text(element: ET.Element | None) -> str:
     if element is None:
         return ""
-    return "".join(element.itertext()).strip()
+    return "".join(_iter_text_with_block_separators(element)).strip()
 
 
 def _parse_norm(norm: ET.Element, slug: str, url: str, retrieved_at: datetime) -> SourceDocument | None:
@@ -75,9 +91,9 @@ def parse_gesetz_xml(xml_bytes: bytes, slug: str, url: str, retrieved_at: dateti
 def fetch_gesetz(slug: str, client: httpx.Client | None = None) -> list[SourceDocument]:
     url = ARCHIVE_URL_TEMPLATE.format(slug=slug)
     owns_client = client is None
-    http_client = client if client is not None else httpx.Client(timeout=30.0)
+    http_client = client if client is not None else httpx.Client(timeout=30.0, follow_redirects=True)
     try:
-        response = http_client.get(url)
+        response = http_client.get(url, follow_redirects=True)
         response.raise_for_status()
     finally:
         if owns_client:

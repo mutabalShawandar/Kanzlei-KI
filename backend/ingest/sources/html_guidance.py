@@ -23,10 +23,12 @@ def extract_title_and_text(html: str, url: str) -> tuple[str, str]:
     if main is None:
         raise GuidancePageError(f"No main content region found for page '{url}'")
 
+    _TEXT_TAGS = ["p", "li", "h2", "h3"]
     paragraphs = [
         paragraph_text
-        for element in main.find_all(["p", "li", "h2", "h3"])
-        if (paragraph_text := element.get_text(" ", strip=True))
+        for element in main.find_all(_TEXT_TAGS)
+        if element.find_parent(_TEXT_TAGS) is None
+        and (paragraph_text := element.get_text(" ", strip=True))
     ]
     text = "\n".join(paragraphs)
     if not text:
