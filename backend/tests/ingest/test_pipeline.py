@@ -81,3 +81,21 @@ async def test_ingest_documents_uses_stable_point_ids(client: QdrantClient) -> N
 
     point = client.retrieve("kb", ids=[point_id_for("doc-1", 0)])
     assert len(point) == 1
+
+
+@pytest.mark.asyncio
+async def test_ingest_documents_embeds_large_corpora_in_batches(client: QdrantClient) -> None:
+    # Each paragraph is long enough to fill its own chunk (well past DEFAULT_MAX_CHUNK_CHARS
+    # once packed with the next one), so 70 paragraphs -> 70 chunks -> >1 embedding batch.
+    long_paragraph = "Word " * 320  # ~1600 chars, over the 1500-char chunk limit alone
+    paragraphs = "\n\n".join(long_paragraph for _ in range(70))
+    documents = [_document("doc-1", paragraphs)]
+    provider = FakeEmbeddingProvider()
+
+    count = await ingest_documents(documents, "kb", provider, client=client)
+
+    assert count >= 70
+    assert len(provider.calls) > 1
+    assert all(len(call) <= 64 for call in provider.calls)
+    assert sum(len(call) for call in provider.calls) == count
+    assert client.count("kb").count == count
