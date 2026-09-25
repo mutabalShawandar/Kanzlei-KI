@@ -3,7 +3,11 @@ import pytest
 import respx
 
 from llm.base import ChatMessage
-from llm.ollama_provider import OllamaProvider
+from llm.ollama_provider import (
+    OllamaConfigError,
+    OllamaProvider,
+    OllamaUnsupportedRequestError,
+)
 
 
 @pytest.mark.asyncio
@@ -49,10 +53,43 @@ async def test_chat_raises_on_http_error() -> None:
 
 
 def test_reads_config_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OLLAMA_BASE_URL", "http://envhost:11434")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "https://envhost:11434")
     monkeypatch.setenv("OLLAMA_MODEL", "env-model")
 
     provider = OllamaProvider()
 
-    assert provider.base_url == "http://envhost:11434"
+    assert provider.base_url == "https://envhost:11434"
     assert provider.model == "env-model"
+
+
+def test_rejects_remote_http_base_url() -> None:
+    with pytest.raises(OllamaConfigError):
+        OllamaProvider(base_url="http://public.example.com:11434", model="llama3")
+
+
+def test_allows_http_for_docker_compose_service_name() -> None:
+    provider = OllamaProvider(base_url="http://ollama:11434", model="llama3")
+    assert provider.base_url == "http://ollama:11434"
+
+
+def test_allows_http_for_private_network_ip() -> None:
+    provider = OllamaProvider(base_url="http://192.168.1.5:11434", model="llama3")
+    assert provider.base_url == "http://192.168.1.5:11434"
+
+
+def test_rejects_http_for_public_ip() -> None:
+    with pytest.raises(OllamaConfigError):
+        OllamaProvider(base_url="http://8.8.8.8:11434", model="llama3")
+
+
+def test_allows_https_remote_base_url() -> None:
+    provider = OllamaProvider(base_url="https://envhost:11434", model="llama3")
+    assert provider.base_url == "https://envhost:11434"
+
+
+@pytest.mark.asyncio
+async def test_rejects_streaming_request() -> None:
+    provider = OllamaProvider(base_url="http://localhost:11434", model="llama3")
+
+    with pytest.raises(OllamaUnsupportedRequestError):
+        await provider.chat([ChatMessage(role="user", content="Hi")], stream=True)
