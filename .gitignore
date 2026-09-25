@@ -34,3 +34,7 @@ Thumbs.db
 PLAN.md
 PHASES.md
 CLAUDE.md
+
+# Gemini CLI
+.gemini/
+gha-creds-*.json
