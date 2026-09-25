@@ -43,7 +43,7 @@ def fetch_guidance_document(
     owns_client = client is None
     http_client = client if client is not None else httpx.Client(timeout=30.0, follow_redirects=True)
     try:
-        response = http_client.get(url)
+        response = http_client.get(url, follow_redirects=True)
         response.raise_for_status()
     finally:
         if owns_client:
